@@ -326,47 +326,87 @@ ${versions.map((version: string, index: number) =>
 
     async getPackageDocumentation(packageName: string, version?: string) {
         try {
-            // README içeriğini al
-            const versionParam = version ? `/versions/${version}` : '';
-            const readmeResponse = await fetch(`https://pub.dev/packages/${packageName}${versionParam}`);
-            let readmeContent = 'README bulunamadı';
-
-            if (readmeResponse.ok) {
-                const readmeHtml = await readmeResponse.text();
-                // HTML'den metin içeriğini çıkar (basit parse)
-                readmeContent = readmeHtml
-                    .replace(/<[^>]*>/g, '')
-                    .replace(/&nbsp;/g, ' ')
-                    .replace(/&lt;/g, '<')
-                    .replace(/&gt;/g, '>')
-                    .replace(/&amp;/g, '&')
-                    .trim();
-            }
-            console.log(JSON.stringify(readmeResponse), readmeContent);
-            // Paket bilgilerini de al
+            // Önce paket bilgilerini al
             const packageData = await this.fetchApi(`/packages/${packageName}`);
+            const targetVersion = version || packageData.latest.version;
 
+            let readmeContent = '';
+
+            // Pub.dev API dokümantasyonu sayfasını al
+            try {
+                const pageUrl = version ?
+                    `https://pub.dev/documentation/${packageName}/${targetVersion}` :
+                    `https://pub.dev/documentation/${packageName}`;
+
+                const readmeResponse = await fetch(pageUrl);
+                if (readmeResponse.ok) {
+                    const readmeHtml = await readmeResponse.text();
+
+                    // API dokümantasyonunun ana içeriğini çıkar
+                    const contentMatch = readmeHtml.match(/<main[^>]*>(.*?)<\/main>/is) ||
+                        readmeHtml.match(/<div[^>]*class="[^"]*content[^"]*"[^>]*>(.*?)<\/div>/is);
+
+                    if (contentMatch) {
+                        readmeContent = contentMatch[1]
+                            .replace(/<[^>]*>/g, '')
+                            .replace(/&nbsp;/g, ' ')
+                            .replace(/&lt;/g, '<')
+                            .replace(/&gt;/g, '>')
+                            .replace(/&amp;/g, '&')
+                            .replace(/&quot;/g, '"')
+                            .replace(/&#x27;/g, "'")
+                            .replace(/&#39;/g, "'")
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                    }
+                }
+            } catch (error) {
+                readmeContent = 'README dokümantasyonu alınırken hata oluştu: ' + (error instanceof Error ? error.message : String(error));
+            }
+
+            const text = `# ${packageName} v${targetVersion} - Dokümantasyon
+
+## Paket Bilgileri
+- **Versiyon:** ${targetVersion}
+- **Açıklama:** ${packageData.latest.pubspec.description}
+- **Pub.dev Sayfası:** https://pub.dev/packages/${packageName}
+- **API Dokümantasyonu:** https://pub.dev/documentation/${packageName}/${targetVersion}/
+${packageData.latest.pubspec.documentation ? `- **Özel Dokümantasyon:** ${packageData.latest.pubspec.documentation}` : ''}
+${version ? `- **Bu Versiyon:** https://pub.dev/packages/${packageName}/versions/${version}` : ''}
+
+## Kurulum
+\`\`\`yaml
+dependencies:
+  ${packageName}: ^${targetVersion}
+\`\`\`
+
+## Import
+\`\`\`dart
+import 'package:${packageName}/${packageName}.dart';
+\`\`\`
+
+---
+
+## README
+${readmeContent || 'README içeriği bulunamadı'}
+
+---
+
+## Faydalı Linkler
+- [Pub.dev Sayfası](https://pub.dev/packages/${packageName})
+- [API Dokümantasyonu](https://pub.dev/documentation/${packageName}/${targetVersion}/)
+- [Örnek Kullanım](https://pub.dev/packages/${packageName}/example)
+${packageData.latest?.pubspec?.documentation ? `- [Özel Dokümantasyon Linki](${packageData.latest?.pubspec?.documentation})` : ''}
+${packageData.latest.pubspec.repository ? `- [Kaynak Kodu](${packageData.latest.pubspec.repository})` : ''}
+${packageData.latest.pubspec.homepage ? `- [Ana Sayfa](${packageData.latest.pubspec.homepage})` : ''}
+${version ? `- [Bu Versiyon](https://pub.dev/packages/${packageName}/versions/${version})` : ''}
+`;
+            console.log(text);
             return {
                 content: [
                     {
                         type: "text",
-                        text: `# ${packageName} Dokümantasyonu
-
-## Paket Bilgileri
-- **Versiyon:** ${version || packageData.latest.version}
-- **Açıklama:** ${packageData.latest.pubspec.description}
-- **Pub.dev:** https://pub.dev/packages/${packageName}
-- **Dokümantasyon:** https://pub.dev/packages/${packageName}/doc
-
-## README
-${readmeContent.length > 2000 ? readmeContent.substring(0, 2000) + '\n\n...(devamı için pub.dev linkini ziyaret edin)' : readmeContent}
-
-## Faydalı Linkler
-- [Pub.dev Sayfası](https://pub.dev/packages/${packageName})
-- [API Dokümantasyonu](https://pub.dev/documentation/${packageName}/latest/)
-- [Örnek Kullanım](https://pub.dev/packages/${packageName}/example)
-${packageData.latest.pubspec.repository ? `- [Kaynak Kodu](${packageData.latest.pubspec.repository})` : ''}
-`,
+                        text: text,
                     },
                 ],
             };
@@ -445,6 +485,4 @@ ${pkg.description}
 }
 
 const server = new FlutterPackageMCPServer();
-server.run().then(() => {
-    server.getPackageDocumentation("provider", "6.1.5");
-}).catch(console.error);
+server.run().catch(console.error);
