@@ -1,0 +1,31 @@
+{
+  "name": "flutter-package-mcp-server",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "bin": {
+    "flutter-package-mcp-server": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts"
+  },
+  "keywords": [
+    "mcp",
+    "flutter",
+    "pub.dev",
+    "packages",
+    "dart"
+  ],
+  "author": "Hasan",
+  "license": "ISC",
+  "description": "Flutter paketleri için MCP server",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}
